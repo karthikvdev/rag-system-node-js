@@ -1,0 +1,27 @@
+services:
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8005:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+
+  app:
+    build: .
+    depends_on:
+      - chromadb
+    volumes:
+      - ./data:/app/data
+      - ./ingest.js:/app/ingest.js
+      - ./embeddings.js:/app/embeddings.js
+      - ./query.js:/app/query.js
+    environment:
+      - CHROMA_URL=http://chromadb:8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    command: tail -f /dev/null  # Keep container running for development
+
+volumes:
+  chroma_data:

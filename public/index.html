@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChromaDB Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .document-card {
+            transition: all 0.3s ease;
+        }
+        .document-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .loading {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .score-bar {
+            transition: width 0.5s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
+            <div class="container mx-auto px-4 py-6">
+                <h1 class="text-3xl font-bold">🗄️ ChromaDB Viewer</h1>
+                <p class="text-blue-100 mt-2">Browse and search your vector database</p>
+            </div>
+        </header>
+
+        <div class="container mx-auto px-4 py-8">
+            <!-- Stats Section -->
+            <div id="stats" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-blue-100 rounded-full">
+                            <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">Collections</p>
+                            <p id="collectionCount" class="text-2xl font-bold text-gray-800">-</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-green-100 rounded-full">
+                            <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">Total Documents</p>
+                            <p id="documentCount" class="text-2xl font-bold text-gray-800">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-purple-100 rounded-full">
+                            <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">Status</p>
+                            <p id="status" class="text-2xl font-bold text-green-600">●</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Section -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">🔍 Search Documents</h2>
+                <div class="flex gap-4">
+                    <select id="searchCollection" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">Select a collection...</option>
+                    </select>
+                    <input 
+                        type="text" 
+                        id="searchQuery" 
+                        placeholder="Enter your search query..."
+                        class="flex-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                    <button 
+                        onclick="searchDocuments()" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition duration-200">
+                        Search
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Results -->
+            <div id="searchResults" class="hidden mb-8">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Search Results</h2>
+                    <div id="searchResultsContent"></div>
+                </div>
+            </div>
+
+            <!-- Collections Section -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">📚 Collections</h2>
+                <div id="collections" class="space-y-4">
+                    <div class="flex justify-center py-8">
+                        <div class="loading"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Documents Modal/Section -->
+            <div id="documentsSection" class="hidden mt-8">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">
+                            <span id="currentCollectionName"></span> Documents
+                        </h2>
+                        <button 
+                            onclick="hideDocuments()" 
+                            class="text-gray-500 hover:text-gray-700">
+                            ✕
+                        </button>
+                    </div>
+                    <div id="documents" class="space-y-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let collections = [];
+
+        // Load collections on page load
+        async function loadCollections() {
+            try {
+                const response = await fetch('/api/collections');
+                collections = await response.json();
+                
+                displayCollections(collections);
+                updateStats(collections);
+                populateSearchDropdown(collections);
+            } catch (error) {
+                document.getElementById('collections').innerHTML = 
+                    `<div class="text-red-600 p-4 bg-red-50 rounded-lg">
+                        <p class="font-bold">Error loading collections</p>
+                        <p class="text-sm">${error.message}</p>
+                    </div>`;
+            }
+        }
+
+        function updateStats(collections) {
+            const totalDocs = collections.reduce((sum, col) => sum + col.count, 0);
+            document.getElementById('collectionCount').textContent = collections.length;
+            document.getElementById('documentCount').textContent = totalDocs;
+        }
+
+        function populateSearchDropdown(collections) {
+            const select = document.getElementById('searchCollection');
+            select.innerHTML = '<option value="">Select a collection...</option>';
+            collections.forEach(col => {
+                const option = document.createElement('option');
+                option.value = col.name;
+                option.textContent = `${col.name} (${col.count} docs)`;
+                select.appendChild(option);
+            });
+        }
+
+        function displayCollections(collections) {
+            const container = document.getElementById('collections');
+            
+            if (collections.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">No collections found</p>';
+                return;
+            }
+
+            container.innerHTML = collections.map(col => `
+                <div class="document-card border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-blue-500"
+                     onclick="loadDocuments('${col.name}')">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-lg text-gray-800">📁 ${col.name}</h3>
+                            <p class="text-sm text-gray-500">ID: ${col.id}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                                ${col.count} documents
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadDocuments(collectionName) {
+            document.getElementById('currentCollectionName').textContent = collectionName;
+            document.getElementById('documentsSection').classList.remove('hidden');
+            document.getElementById('documents').innerHTML = 
+                '<div class="flex justify-center py-8"><div class="loading"></div></div>';
+
+            try {
+                const response = await fetch(`/api/collections/${collectionName}/documents?limit=100`);
+                const data = await response.json();
+                
+                displayDocuments(data.documents);
+            } catch (error) {
+                document.getElementById('documents').innerHTML = 
+                    `<div class="text-red-600 p-4 bg-red-50 rounded-lg">
+                        <p class="font-bold">Error loading documents</p>
+                        <p class="text-sm">${error.message}</p>
+                    </div>`;
+            }
+        }
+
+        function displayDocuments(documents) {
+            const container = document.getElementById('documents');
+            
+            if (documents.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">No documents found</p>';
+                return;
+            }
+
+            container.innerHTML = documents.map((doc, index) => {
+                const hasEmbedding = doc.embedding && doc.embedding.length > 0;
+                const embeddingDim = hasEmbedding ? doc.embedding.length : 0;
+                
+                return `
+                <div class="document-card border border-gray-200 rounded-lg p-4">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-mono bg-gray-100 px-2 py-1 rounded">Doc ${index + 1}</span>
+                        <span class="text-xs text-gray-500">${doc.id}</span>
+                    </div>
+                    ${doc.metadata ? `
+                        <div class="mb-2 flex flex-wrap gap-2">
+                            ${Object.entries(doc.metadata).map(([key, value]) => `
+                                <span class="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                                    <strong>${key}:</strong> ${value}
+                                </span>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    
+                    ${hasEmbedding ? `
+                        <div class="mb-2">
+                            <button 
+                                onclick="toggleEmbedding('embedding-${index}')" 
+                                class="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-3 py-1 rounded text-xs font-medium hover:bg-purple-200 transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                                Embedding Vector (${embeddingDim} dimensions)
+                            </button>
+                            <div id="embedding-${index}" class="hidden mt-2 bg-purple-50 p-3 rounded border border-purple-200">
+                                <div class="flex gap-2 mb-2">
+                                    <button onclick="showEmbeddingView('embedding-${index}', 'stats')" 
+                                            class="text-xs bg-white px-2 py-1 rounded hover:bg-purple-100">
+                                        📊 Stats
+                                    </button>
+                                    <button onclick="showEmbeddingView('embedding-${index}', 'preview')" 
+                                            class="text-xs bg-white px-2 py-1 rounded hover:bg-purple-100">
+                                        👁️ Preview
+                                    </button>
+                                    <button onclick="showEmbeddingView('embedding-${index}', 'full')" 
+                                            class="text-xs bg-white px-2 py-1 rounded hover:bg-purple-100">
+                                        📄 Full Vector
+                                    </button>
+                                    <button onclick="showEmbeddingView('embedding-${index}', 'visual')" 
+                                            class="text-xs bg-white px-2 py-1 rounded hover:bg-purple-100">
+                                        📈 Visualization
+                                    </button>
+                                </div>
+                                <div class="embedding-content" data-embedding='${JSON.stringify(doc.embedding)}'>
+                                    ${getEmbeddingStats(doc.embedding)}
+                                </div>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="mb-2">
+                            <span class="inline-block bg-gray-100 text-gray-500 px-3 py-1 rounded text-xs">
+                                No embedding available
+                            </span>
+                        </div>
+                    `}
+                    
+                    <div class="text-gray-700 text-sm bg-gray-50 p-3 rounded mt-2 max-h-40 overflow-y-auto">
+                        ${doc.content ? doc.content.substring(0, 500) + (doc.content.length > 500 ? '...' : '') : 'No content'}
+                    </div>
+                </div>
+            `;
+            }).join('');
+        }
+
+        async function searchDocuments() {
+            const collection = document.getElementById('searchCollection').value;
+            const query = document.getElementById('searchQuery').value;
+
+            if (!collection || !query) {
+                alert('Please select a collection and enter a search query');
+                return;
+            }
+
+            document.getElementById('searchResults').classList.remove('hidden');
+            document.getElementById('searchResultsContent').innerHTML = 
+                '<div class="flex justify-center py-8"><div class="loading"></div></div>';
+
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, collectionName: collection, limit: 5 })
+                });
+
+                const results = await response.json();
+                displaySearchResults(results);
+            } catch (error) {
+                document.getElementById('searchResultsContent').innerHTML = 
+                    `<div class="text-red-600 p-4 bg-red-50 rounded-lg">
+                        <p class="font-bold">Error searching</p>
+                        <p class="text-sm">${error.message}</p>
+                    </div>`;
+            }
+        }
+
+        function displaySearchResults(results) {
+            const container = document.getElementById('searchResultsContent');
+            
+            if (results.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">No results found</p>';
+                return;
+            }
+
+            container.innerHTML = results.map((result, index) => {
+                const similarity = ((1 - result.score) * 100).toFixed(1);
+                return `
+                    <div class="document-card border-l-4 border-blue-500 bg-white p-4 mb-4 rounded">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-bold text-gray-800">Result ${index + 1}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-500">Similarity:</span>
+                                <div class="w-24 bg-gray-200 rounded-full h-2">
+                                    <div class="score-bar bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full" 
+                                         style="width: ${similarity}%"></div>
+                                </div>
+                                <span class="text-sm font-bold text-gray-700">${similarity}%</span>
+                            </div>
+                        </div>
+                        ${result.metadata ? `
+                            <div class="mb-2 flex flex-wrap gap-2">
+                                ${Object.entries(result.metadata).map(([key, value]) => `
+                                    <span class="inline-block bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
+                                        <strong>${key}:</strong> ${value}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        <div class="text-gray-700 text-sm bg-gray-50 p-3 rounded mt-2">
+                            ${result.content}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function hideDocuments() {
+            document.getElementById('documentsSection').classList.add('hidden');
+        }
+
+        function toggleEmbedding(embeddingId) {
+            const element = document.getElementById(embeddingId);
+            element.classList.toggle('hidden');
+        }
+
+        function getEmbeddingStats(embedding) {
+            if (!embedding || embedding.length === 0) return '<p class="text-gray-500">No embedding data</p>';
+            
+            const mean = embedding.reduce((a, b) => a + b, 0) / embedding.length;
+            const min = Math.min(...embedding);
+            const max = Math.max(...embedding);
+            const variance = embedding.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / embedding.length;
+            const stdDev = Math.sqrt(variance);
+            
+            return `
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-white p-2 rounded">
+                        <span class="text-gray-600">Dimensions:</span>
+                        <span class="font-bold text-purple-700">${embedding.length}</span>
+                    </div>
+                    <div class="bg-white p-2 rounded">
+                        <span class="text-gray-600">Mean:</span>
+                        <span class="font-bold text-purple-700">${mean.toFixed(6)}</span>
+                    </div>
+                    <div class="bg-white p-2 rounded">
+                        <span class="text-gray-600">Min:</span>
+                        <span class="font-bold text-purple-700">${min.toFixed(6)}</span>
+                    </div>
+                    <div class="bg-white p-2 rounded">
+                        <span class="text-gray-600">Max:</span>
+                        <span class="font-bold text-purple-700">${max.toFixed(6)}</span>
+                    </div>
+                    <div class="bg-white p-2 rounded">
+                        <span class="text-gray-600">Std Dev:</span>
+                        <span class="font-bold text-purple-700">${stdDev.toFixed(6)}</span>
+                    </div>
+                    <div class="bg-white p-2 rounded">
+                        <span class="text-gray-600">Range:</span>
+                        <span class="font-bold text-purple-700">${(max - min).toFixed(6)}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showEmbeddingView(embeddingId, view) {
+            const container = document.getElementById(embeddingId).querySelector('.embedding-content');
+            const embedding = JSON.parse(container.dataset.embedding);
+            
+            if (view === 'stats') {
+                container.innerHTML = getEmbeddingStats(embedding);
+            } else if (view === 'preview') {
+                const preview = embedding.slice(0, 20);
+                container.innerHTML = `
+                    <div class="bg-white p-3 rounded">
+                        <p class="text-xs text-gray-600 mb-2">First 20 dimensions:</p>
+                        <div class="font-mono text-xs bg-gray-50 p-2 rounded overflow-x-auto">
+                            [${preview.map(v => v.toFixed(4)).join(', ')}...]
+                        </div>
+                    </div>
+                `;
+            } else if (view === 'full') {
+                container.innerHTML = `
+                    <div class="bg-white p-3 rounded max-h-64 overflow-y-auto">
+                        <p class="text-xs text-gray-600 mb-2">Complete vector (${embedding.length} dimensions):</p>
+                        <div class="font-mono text-xs bg-gray-50 p-2 rounded break-all">
+                            [${embedding.map((v, i) => {
+                                if (i % 10 === 0) return '<br>' + v.toFixed(6);
+                                return v.toFixed(6);
+                            }).join(', ')}]
+                        </div>
+                    </div>
+                `;
+            } else if (view === 'visual') {
+                // Create a simple bar chart visualization
+                const sample = embedding.slice(0, 50); // Show first 50 dimensions
+                const maxVal = Math.max(...sample.map(Math.abs));
+                
+                container.innerHTML = `
+                    <div class="bg-white p-3 rounded">
+                        <p class="text-xs text-gray-600 mb-2">Visualization (first 50 dimensions):</p>
+                        <div class="flex items-end gap-px h-32 bg-gray-50 p-2 rounded">
+                            ${sample.map(val => {
+                                const height = Math.abs(val) / maxVal * 100;
+                                const color = val >= 0 ? 'bg-blue-500' : 'bg-red-500';
+                                return `<div class="${color} w-full" style="height: ${height}%" title="${val.toFixed(6)}"></div>`;
+                            }).join('')}
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1 text-center">
+                            Blue = positive, Red = negative values
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        // Allow search on Enter key
+        document.getElementById('searchQuery').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchDocuments();
+            }
+        });
+
+        // Load collections on page load
+        loadCollections();
+    </script>
+</body>
+</html>
+
