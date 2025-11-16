@@ -3,6 +3,7 @@ import { ChromaClient } from "chromadb";
 import { Chroma } from "@langchain/community/vectorstores/chroma";
 import { embeddingModel } from "./embeddings.js";
 import "dotenv/config";
+import { ingest } from "./ingest.js";
 
 const app = express();
 const PORT = 3000;
@@ -95,8 +96,13 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ message: "OK" });
+});
+
 app.listen(PORT, () => {
   console.log(`\n🚀 ChromaDB Viewer running at http://localhost:${PORT}`);
   console.log(`📊 Connected to ChromaDB at ${CHROMA_URL}\n`);
+  ingest();
 });
 

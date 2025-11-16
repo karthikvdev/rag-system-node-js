@@ -3,7 +3,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { embeddingModel } from "./embeddings.js";
 
-async function ingest() {
+export async function ingest() {
   const loader = new PDFLoader("data/myfile.pdf");
   const docs = await loader.load();
 
@@ -32,6 +32,4 @@ async function ingest() {
 
   console.log("📚 PDF Ingestion Complete!");
 }
-
-ingest();
 
